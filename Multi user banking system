@@ -1,0 +1,264 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.HashMap;
+import java.util.Map;
+
+//  Account Base Class
+abstract class Account {
+    protected String username;
+    protected double balance;
+
+    public Account(String username) {
+        this.username = username;
+        this.balance = 0.0;
+    }
+
+    public String getUsername() { return username; }
+    public double getBalance() { return balance; }
+
+    public void deposit(double amount) {
+        if (amount > 0) balance += amount;
+    }
+
+    public abstract void calculateInterest();
+    public abstract boolean withdraw(double amount);
+}
+
+// 💰 Savings Account
+class SavingsAccount extends Account {
+    public SavingsAccount(String username) {
+        super(username);
+    }
+
+    @Override
+    public void calculateInterest() {
+        balance += balance * 0.04; // 4% interest
+    }
+
+    @Override
+    public boolean withdraw(double amount) {
+        if (amount <= balance && amount <= 10000) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+}
+
+// 💼 Current Account
+class CurrentAccount extends Account {
+    public CurrentAccount(String username) {
+        super(username);
+    }
+
+    @Override
+    public void calculateInterest() {
+        // No interest
+    }
+
+    @Override
+    public boolean withdraw(double amount) {
+        if (amount <= balance && amount <= 25000) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+}
+
+// 📦 DAO Interface
+interface AccountDAO {
+    boolean register(String username, String password, String type);
+    boolean login(String username, String password);
+    Account getAccount(String username);
+}
+
+//  DAO Implementation (Memory-based)
+class AccountDAOImpl implements AccountDAO {
+    private final Map<String, String> credentials = new HashMap<>();
+    private final Map<String, Account> accounts = new HashMap<>();
+
+    public boolean register(String username, String password, String type) {
+        if (credentials.containsKey(username)) return false;
+
+        credentials.put(username, password);
+        if (type.equalsIgnoreCase("Savings")) {
+            accounts.put(username, new SavingsAccount(username));
+        } else {
+            accounts.put(username, new CurrentAccount(username));
+        }
+        return true;
+    }
+
+    public boolean login(String username, String password) {
+        return credentials.containsKey(username) && credentials.get(username).equals(password);
+    }
+
+    public Account getAccount(String username) {
+        return accounts.get(username);
+    }
+}
+
+// 🧾 Register Window
+class RegisterWindow extends JFrame {
+    public RegisterWindow(AccountDAO dao) {
+        setTitle("Register");
+        setSize(300, 220);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+
+        JTextField userField = new JTextField();
+        JPasswordField passField = new JPasswordField();
+        String[] types = {"Savings", "Current"};
+        JComboBox<String> typeBox = new JComboBox<>(types);
+        JButton registerBtn = new JButton("Register");
+
+        registerBtn.addActionListener(e -> {
+            String user = userField.getText();
+            String pass = new String(passField.getPassword());
+            String type = typeBox.getSelectedItem().toString();
+            if (dao.register(user, pass, type)) {
+                JOptionPane.showMessageDialog(this, "Registered successfully!");
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Username already exists.");
+            }
+        });
+
+        JPanel panel = new JPanel(new GridLayout(4, 2, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.add(new JLabel("Username:")); panel.add(userField);
+        panel.add(new JLabel("Password:")); panel.add(passField);
+        panel.add(new JLabel("Account Type:")); panel.add(typeBox);
+        panel.add(new JLabel("")); panel.add(registerBtn);
+        add(panel);
+    }
+}
+
+//  Login Window
+class LoginWindow extends JFrame {
+    public LoginWindow(AccountDAO dao) {
+        setTitle("Login");
+        setSize(300, 180);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+
+        JTextField userField = new JTextField();
+        JPasswordField passField = new JPasswordField();
+        JButton loginBtn = new JButton("Login");
+
+        loginBtn.addActionListener(e -> {
+            String username = userField.getText();
+            String password = new String(passField.getPassword());
+
+            if (dao.login(username, password)) {
+                Account acc = dao.getAccount(username);
+                dispose();
+                new DashboardWindow(acc).setVisible(true);
+            } else {
+                JOptionPane.showMessageDialog(this, "Invalid credentials.");
+            }
+        });
+
+        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+        panel.add(new JLabel("Username:")); panel.add(userField);
+        panel.add(new JLabel("Password:")); panel.add(passField);
+        panel.add(new JLabel("")); panel.add(loginBtn);
+        add(panel);
+    }
+}
+
+// 📊 Dashboard Window
+class DashboardWindow extends JFrame {
+    public DashboardWindow(Account acc) {
+        setTitle("Dashboard - " + acc.getUsername());
+        setSize(350, 300);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        setLayout(new GridLayout(6, 1, 10, 10));
+
+        JLabel welcome = new JLabel("Welcome, " + acc.getUsername(), JLabel.CENTER);
+        JLabel balanceLabel = new JLabel("Balance: ₹" + acc.getBalance(), JLabel.CENTER);
+        JButton depositBtn = new JButton("Deposit");
+        JButton withdrawBtn = new JButton("Withdraw");
+        JButton interestBtn = new JButton("Add Interest");
+        JButton exitBtn = new JButton("Logout");
+
+        depositBtn.addActionListener(e -> {
+            String input = JOptionPane.showInputDialog(this, "Enter deposit amount:");
+            try {
+                double amount = Double.parseDouble(input);
+                acc.deposit(amount);
+                balanceLabel.setText("Balance: ₹" + acc.getBalance());
+            } catch (Exception ignored) {}
+        });
+
+        withdrawBtn.addActionListener(e -> {
+            String input = JOptionPane.showInputDialog(this, "Enter withdrawal amount:");
+            try {
+                double amount = Double.parseDouble(input);
+                if (acc.withdraw(amount)) {
+                    balanceLabel.setText("Balance: ₹" + acc.getBalance());
+                } else {
+                    JOptionPane.showMessageDialog(this, "Withdrawal failed (check balance/limit).");
+                }
+            } catch (Exception ignored) {}
+        });
+
+        interestBtn.addActionListener(e -> {
+            acc.calculateInterest();
+            balanceLabel.setText("Balance: ₹" + acc.getBalance());
+        });
+
+        exitBtn.addActionListener(e -> dispose());
+
+        add(welcome);
+        add(balanceLabel);
+        add(depositBtn);
+        add(withdrawBtn);
+        add(interestBtn);
+        add(exitBtn);
+    }
+}
+
+// 🏠 Home Page
+public class BankSystemApp extends JFrame {
+    private final AccountDAO dao = new AccountDAOImpl();
+
+    public BankSystemApp() {
+        setTitle("Multi-User Banking System");
+        setSize(400, 250);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+
+        JLabel title = new JLabel("Multi-User Banking System", JLabel.CENTER);
+        title.setFont(new Font("Arial", Font.BOLD, 18));
+        title.setBorder(BorderFactory.createEmptyBorder(20, 0, 10, 0));
+        add(title, BorderLayout.NORTH);
+
+        JPanel centerPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 20, 10, 20);
+
+        JButton login = new JButton("Login");
+        JButton register = new JButton("Register");
+        JButton exit = new JButton("Exit");
+
+        login.addActionListener(e -> new LoginWindow(dao).setVisible(true));
+        register.addActionListener(e -> new RegisterWindow(dao).setVisible(true));
+        exit.addActionListener(e -> System.exit(0));
+
+        gbc.gridy = 0; centerPanel.add(login, gbc);
+        gbc.gridy = 1; centerPanel.add(register, gbc);
+        gbc.gridy = 2; centerPanel.add(exit, gbc);
+
+        add(centerPanel, BorderLayout.CENTER);
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new BankSystemApp().setVisible(true));
+    }
+}
